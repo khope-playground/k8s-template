@@ -1,57 +1,70 @@
-# K8s-template
+# k8s-template
 
-본 저장소는 khope-playground에 올라갈 프로젝트들이 사용할 Kubernetes 기반 배포 템플릿. Spring Boot 애플리케이션, MySQL, Redis Cluster를 Kubernetes 환경에 배포하기 위한 설정을 포함하고 있음.
+플레이그라운드에서 쓸 서버들 배포 템플릿 리드미 gpt시킴킴
 
 ## 디렉터리 구조
 
 ```
 k8s/
-├── spring/          # Spring 앱 배포용 Deployment, Service
-├── mysql/           # MySQL StatefulSet, Secret, PVC 등
-├── redis/           # Redis Cluster 구성용 ConfigMap, StatefulSet
-└── base/            # namespace 등 공통 리소스 정의
+├── base/                   # namespace 등 공통 리소스
+│   └── namespace.yaml
+├── spring/                 # Deployment, Service, Probe 설정
+│   ├── deployment.yaml
+│   └── service.yaml
+├── mysql/                  # StatefulSet, Secret, PVC
+│   ├── secret.yaml
+│   ├── pvc.yaml
+│   ├── statefulset.yaml
+│   └── service.yaml
+├── redis/                  # ConfigMap, StatefulSet, Headless Service, Init Job, Probe
+│   ├── service-headless.yaml
+│   ├── configmap.yaml
+│   ├── statefulset.yaml
+│   └── init-cluster-job.yaml
+└── monitoring/             # Prometheus & Grafana 모듈
+    ├── prometheus-configmap.yaml
+    ├── prometheus-deploy.yaml
+    └── grafana-deploy.yaml
 ```
 
-## 구성 설명
+## spring/
 
-### spring/
+* 여러 replica로 Spring Boot 앱 배포.
+* `/actuator/health` 기반 LivenessProbe, ReadinessProbe 설정.
+* ClusterIP Service로 내부 통신 제공.
 
-Spring Boot 앱을 여러 replica로 배포하며 내부 ClusterIP 서비스로 노출함. 환경변수로 MySQL 연결정보와 Redis 클러스터 노드 정보를 주입함.
+## mysql/
 
-### mysql/
+* StatefulSet 기반 단일 MySQL 인스턴스 배포.
+* PVC로 데이터 영속성 보장.
+* 비밀번호는 Secret으로 관리.
 
-StatefulSet 기반 단일 인스턴스 MySQL을 배포함. PVC를 통해 데이터 영속성을 유지하며, 비밀번호는 Secret을 사용하여 관리함.
+## redis/
 
-### redis/
+* 6개 노드(3 Master + 3 Replica) Redis Cluster 배포.
+* ConfigMap으로 `redis.conf` 설정 주입.
+* Headless Service로 Pod 간 DNS 통신 지원.
+* TCP 6379 기반 Probe 설정.
+* Init Job으로 클러스터 자동 초기화 (`redis-cli --cluster create ... --cluster-yes`).
 
-6개 노드로 구성된 Redis Cluster 배포 구조임 (3 master, 3 replica). redis.conf는 ConfigMap으로 관리되며, Headless Service를 통해 노드 간 통신을 지원함.
+## monitoring/
 
-클러스터 초기화는 다음 명령어로 수동 수행함:
+* Prometheus로 메트릭 수집 환경 제공.
+* Grafana로 대시보드 시각화 환경 제공.
+* ConfigMap에 Spring 앱 타겟 등록.
+
+## 배포 방법
 
 ```bash
-redis-cli --cluster create \
-redis-cluster-0.redis-cluster-headless:6379 \
-redis-cluster-1.redis-cluster-headless:6379 \
-redis-cluster-2.redis-cluster-headless:6379 \
-redis-cluster-3.redis-cluster-headless:6379 \
-redis-cluster-4.redis-cluster-headless:6379 \
-redis-cluster-5.redis-cluster-headless:6379 \
---cluster-replicas 1
+kubectl apply -f k8s/base/namespace.yaml  
+kubectl apply -f k8s/mysql/  
+kubectl apply -f k8s/redis/  
+kubectl apply -f k8s/spring/  
+kubectl apply -f k8s/monitoring/  
 ```
 
-# 배포 방법
+Kustomize 사용 시:
 
-kustomize 없이 디렉터리별 배포:
-
+```bash
+kubectl apply -k k8s/
 ```
-kubectl apply -f base/namespace.yaml
-kubectl apply -f mysql/
-kubectl apply -f redis/
-kubectl apply -f spring/
-```
-
-
-
-kustomize 사용 시:
-
-`kubectl apply -k k8s-template/`
