@@ -54,4 +54,4 @@ kubectl apply -f spring/
 
 kustomize 사용 시:
 
-kubectl apply -k k8s/
+`kubectl apply -k k8s-template/`
